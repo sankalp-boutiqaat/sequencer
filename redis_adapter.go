@@ -7,13 +7,19 @@ import (
 	"github.com/go-redis/redis"
 )
 
+//local Key to be used for resetting
+//used for rolling counters.
 const REDIS_RESET_KEY = "reset"
 
+//
+// Initialization of Redis Sequencer.
+//
 func InitializeRedisSequencer(opt Options, conf RedisConfig) *RedisSequencer {
-	client := redis.NewClient(&redis.Options{
-		Addr:     conf.Addr,
+	client := redis.NewUniversalClient(&redis.UniversalOptions{
+		Addrs:    conf.Addrs,
 		Password: "", // no password set
 		DB:       0,  // use default DB
+		PoolSize: conf.PoolSize,
 	})
 	redisSimple := RedisSequencer{
 		client: client,
@@ -29,18 +35,27 @@ func InitializeRedisSequencer(opt Options, conf RedisConfig) *RedisSequencer {
 	return &redisSimple
 }
 
+//
+// RedisConfig defines the configuration to be passed on to
+// redis sequencer.
+//
 type RedisConfig struct {
-	Addr     string
+	Addrs    []string
 	Password string
 	PoolSize int
 }
 
-//handle case when key does not exists and start is specified.
+//
+// Redis Sequencer
+//
 type RedisSequencer struct {
 	options
-	client *redis.Client
+	client redis.UniversalClient
 }
 
+//
+// Implementation of Sequencer Init() method
+//
 func (this *RedisSequencer) Init() error {
 	_, err := this.initKey()
 	if err != nil {
@@ -49,6 +64,21 @@ func (this *RedisSequencer) Init() error {
 	return nil
 }
 
+//
+// Creates the key only if it does not already exists.
+//
+func (this *RedisSequencer) initKey() (bool, error) {
+	//create key only if it not exists.
+	ret := this.client.SetNX(this.name, this.getStart(), 0)
+	if ret.Err() != nil {
+		return false, ret.Err()
+	}
+	return ret.Val(), nil
+}
+
+//
+// Implementation of sequencer Next() method.
+//
 func (this *RedisSequencer) Next() (int, error) {
 	if !this.isRolling && !this.isReverse {
 		return this.incr()
@@ -89,20 +119,12 @@ func (this *RedisSequencer) Next() (int, error) {
 		}
 		return 0, err
 	}
-
 	return 0, fmt.Errorf("Invalid Option. How did u landed here?")
-
 }
 
-func (this *RedisSequencer) initKey() (bool, error) {
-	//create key only if it not exists.
-	ret := this.client.SetNX(this.name, this.getStart(), 0)
-	if ret.Err() != nil {
-		return false, ret.Err()
-	}
-	return ret.Val(), nil
-}
-
+//
+// Decrement the Sequence.
+//
 func (this *RedisSequencer) decr() (int, error) {
 	ret := this.client.Decr(this.name)
 	if ret.Err() != nil {
@@ -115,6 +137,9 @@ func (this *RedisSequencer) decr() (int, error) {
 	return int(res), nil
 }
 
+//
+// Increament the Sequence.
+//
 func (this *RedisSequencer) incr() (int, error) {
 	ret := this.client.Incr(this.name)
 	if ret.Err() != nil {
@@ -127,7 +152,10 @@ func (this *RedisSequencer) incr() (int, error) {
 	return res, nil
 }
 
-//@todo: need to work on atomicity here.
+//
+// Reset the Sequence to original state.
+// Best used by rolling Sequencer.
+//
 func (this *RedisSequencer) reset() error {
 	lockKey := fmt.Sprintf("%s_%s", this.name, REDIS_RESET_KEY)
 	res := this.client.SetNX(lockKey, "", 10*time.Second)
@@ -156,10 +184,16 @@ func (this *RedisSequencer) reset() error {
 	return nil
 }
 
+//
+// Implementation of Sequencer Reset() method.
+//
 func (this *RedisSequencer) Reset() error {
 	return this.reset()
 }
 
+//
+// Implementation of Sequencer Destroy() method.
+//
 func (this *RedisSequencer) Destroy() error {
 	return ErrNotImplemented
 }
