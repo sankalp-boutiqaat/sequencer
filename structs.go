@@ -4,7 +4,10 @@ package sequencer
 // Options to be passed on to Sequencer.
 //
 type Options struct {
-	Name    string
+	Key struct {
+		Name   string
+		Bucket string
+	}
 	Start   int
 	Limit   int
 	Rolling bool

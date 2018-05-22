@@ -24,7 +24,8 @@ func InitializeRedisSequencer(opt Options, conf RedisConfig) *RedisSequencer {
 	redisSimple := RedisSequencer{
 		client: client,
 		options: options{
-			name:      opt.Name,
+			bucket:    opt.Key.Bucket,
+			name:      opt.Key.Name,
 			start:     opt.Start,
 			limit:     opt.Limit,
 			isRolling: opt.Rolling,
@@ -69,7 +70,7 @@ func (this *RedisSequencer) Init() error {
 //
 func (this *RedisSequencer) initKey() (bool, error) {
 	//create key only if it not exists.
-	ret := this.client.SetNX(this.name, this.getStart(), 0)
+	ret := this.client.SetNX(this.getName(), this.getStart(), 0)
 	if ret.Err() != nil {
 		return false, ret.Err()
 	}
@@ -126,7 +127,7 @@ func (this *RedisSequencer) Next() (int, error) {
 // Decrement the Sequence.
 //
 func (this *RedisSequencer) decr() (int, error) {
-	ret := this.client.Decr(this.name)
+	ret := this.client.Decr(this.getName())
 	if ret.Err() != nil {
 		return 0, ret.Err()
 	}
@@ -141,7 +142,7 @@ func (this *RedisSequencer) decr() (int, error) {
 // Increament the Sequence.
 //
 func (this *RedisSequencer) incr() (int, error) {
-	ret := this.client.Incr(this.name)
+	ret := this.client.Incr(this.getName())
 	if ret.Err() != nil {
 		return 0, ret.Err()
 	}
@@ -157,7 +158,7 @@ func (this *RedisSequencer) incr() (int, error) {
 // Best used by rolling Sequencer.
 //
 func (this *RedisSequencer) reset() error {
-	lockKey := fmt.Sprintf("%s_%s", this.name, REDIS_RESET_KEY)
+	lockKey := this.getLockName()
 	res := this.client.SetNX(lockKey, "", 10*time.Second)
 	if res.Err() != nil {
 		return res.Err()
@@ -166,14 +167,14 @@ func (this *RedisSequencer) reset() error {
 		return ErrLockNotGranted
 	}
 	this.client.Watch(func(tx *redis.Tx) error {
-		n64, err := tx.Get(this.name).Int64()
+		n64, err := tx.Get(this.getName()).Int64()
 		if err != nil {
 			return err
 		}
 		n := int(n64)
 		tx.Pipelined(func(pipe redis.Pipeliner) error {
 			if (!this.isReverse && n > this.limit) || (this.isReverse && n < this.limit) {
-				_ = pipe.Set(this.name, this.getStart(), 0)
+				_ = pipe.Set(this.getName(), this.getStart(), 0)
 			}
 			pipe.Del(lockKey)
 			return nil
@@ -204,4 +205,14 @@ func (this *RedisSequencer) getStart() int {
 	} else {
 		return this.start - 1
 	}
+}
+
+func (this *RedisSequencer) getName() string {
+	name := fmt.Sprintf("%s_{%s}", this.name, this.bucket)
+	return name
+}
+
+func (this *RedisSequencer) getLockName() string {
+	name := fmt.Sprintf("%s_%s_{%s}", this.name, REDIS_RESET_KEY, this.bucket)
+	return name
 }

@@ -25,6 +25,7 @@ type Sequencer interface {
 //
 type options struct {
 	name      string
+	bucket    string
 	start     int
 	limit     int
 	isRolling bool
