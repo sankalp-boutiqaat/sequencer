@@ -11,11 +11,11 @@ import (
 func main() {
 
 	var options sequencer.Options = sequencer.Options{
-		Name:    "sequencer1",
-		Start:   1,
-		Limit:   10,
+		Name:    "sequencer6",
+		Start:   10,
+		Limit:   0,
 		Rolling: true,
-		Reverse: false,
+		Reverse: true,
 	}
 
 	var conf sequencer.RedisConfig = sequencer.RedisConfig{

@@ -96,7 +96,7 @@ func (this *RedisSequencer) Next() (int, error) {
 
 func (this *RedisSequencer) initKey() (bool, error) {
 	//create key only if it not exists.
-	ret := this.client.SetNX(this.name, this.start-1, 0)
+	ret := this.client.SetNX(this.name, this.getStart(), 0)
 	if ret.Err() != nil {
 		return false, ret.Err()
 	}
@@ -109,7 +109,7 @@ func (this *RedisSequencer) decr() (int, error) {
 		return 0, ret.Err()
 	}
 	res := int(ret.Val())
-	if res <= this.limit {
+	if res < this.limit {
 		return 0, ErrLimitReached
 	}
 	return int(res), nil
@@ -145,7 +145,7 @@ func (this *RedisSequencer) reset() error {
 		n := int(n64)
 		tx.Pipelined(func(pipe redis.Pipeliner) error {
 			if (!this.isReverse && n > this.limit) || (this.isReverse && n < this.limit) {
-				_ = pipe.Set(this.name, this.start-1, 0)
+				_ = pipe.Set(this.name, this.getStart(), 0)
 			}
 			pipe.Del(lockKey)
 			return nil
@@ -162,4 +162,12 @@ func (this *RedisSequencer) Reset() error {
 
 func (this *RedisSequencer) Destroy() error {
 	return ErrNotImplemented
+}
+
+func (this *RedisSequencer) getStart() int {
+	if this.isReverse {
+		return this.start + 1
+	} else {
+		return this.start - 1
+	}
 }
