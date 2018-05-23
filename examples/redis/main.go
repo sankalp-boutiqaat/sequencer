@@ -24,7 +24,7 @@ func main() {
 	}
 
 	var conf sequencer.RedisConfig = sequencer.RedisConfig{
-		Addrs: []string{"172.17.0.2:30001", "172.17.0.2:30003"},
+		Addrs: []string{"localhost:6379"},
 	}
 
 	sequenceG, err := sequencer.Initialize(sequencer.ADAPTER_TYPE_REDIS, options, conf)
