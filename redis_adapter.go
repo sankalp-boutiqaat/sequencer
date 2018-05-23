@@ -147,7 +147,7 @@ func (this *RedisSequencer) incr() (int, error) {
 		return 0, ret.Err()
 	}
 	res := int(ret.Val())
-	if res > this.limit {
+	if res > this.limit && this.limit > this.start {
 		return 0, ErrLimitReached
 	}
 	return res, nil
